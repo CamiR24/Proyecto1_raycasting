@@ -1,21 +1,33 @@
 mod framebuffer;
 mod load_maze;
+mod player;
 
 use raylib::prelude::*;
 use framebuffer::FrameBuffer;
+use player::Player;
 
 fn main() {
     let maze = load_maze::load_maze("./maze.txt");
 
-    // Obtener las dimensiones reales del laberinto
+    let player_start = player::find_player_position(&maze);
+
+    let mut player = match player_start {
+        Some((x, y)) => Player {
+            pos: Vector2::new(x as f32 + 0.5, y as f32 + 0.5),
+            a: 0.0,
+        },
+        None => Player {
+            pos: Vector2::new(1.5, 1.5),
+            a: 0.0,
+        },
+    };
+
     let maze_height = maze.len();
     let maze_width = if maze_height > 0 { maze[0].len() } else { 1 };
 
-    // Configurar el framebuffer con las dimensiones exactas del laberinto
     let framebuffer_width = maze_width;
     let framebuffer_height = maze_height;
 
-    // Configurar el tamaño de la ventana (puedes ajustar este multiplicador)
     let cell_size = 70; // Tamaño de cada celda en píxeles
     let window_width = framebuffer_width * cell_size;
     let window_height = framebuffer_height * cell_size;
@@ -29,17 +41,22 @@ fn main() {
 
     let mut framebuffer = FrameBuffer::new(framebuffer_width, framebuffer_height, Color::WHITE);
     
-    // Cada celda del laberinto ocupará exactamente 1 píxel en el framebuffer
     let block_size = 1;
 
     while !window.window_should_close() {
         framebuffer.clear();
         render_maze(&mut framebuffer, &maze, block_size);
+
+        let player_x = player.pos.x as usize;
+        let player_y = player.pos.y as usize;
+
+        if player_x < framebuffer_width && player_y < framebuffer_height {
+            framebuffer.point(player_x, player_y, Color::RED); // Jugador en rojo
+        }
         
         let mut d = window.begin_drawing(&thread);
         d.clear_background(Color::BLACK);
         
-        // Dibujar el framebuffer en la ventana
         for y in 0..framebuffer_height {
             for x in 0..framebuffer_width {
                 let color = framebuffer.get_color(x, y);
@@ -63,7 +80,7 @@ fn draw_cell(
 ) {
     let color = match cell {
         '+' | '-' | '|' => Color::BLACK, // Paredes
-        'p' => Color::BLUE,              // Jugador
+        'p' => Color::WHITE,             // Espacio donde estaba el jugador (ahora vacío)
         'g' => Color::GREEN,             // Meta
         ' ' => Color::WHITE,             // Camino
         _ => Color::GRAY,                // Otro
