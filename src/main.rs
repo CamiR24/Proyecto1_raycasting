@@ -50,9 +50,9 @@ fn main() {
         let player_x = player.pos.x as usize;
         let player_y = player.pos.y as usize;
 
-        if player_x < framebuffer_width && player_y < framebuffer_height {
+        /*if player_x < framebuffer_width && player_y < framebuffer_height {
             framebuffer.point(player_x, player_y, Color::RED); // Jugador en rojo
-        }
+        }*/
         
         let mut d = window.begin_drawing(&thread);
         d.clear_background(Color::BLACK);
@@ -80,7 +80,7 @@ fn draw_cell(
 ) {
     let color = match cell {
         '+' | '-' | '|' => Color::BLACK, // Paredes
-        'p' => Color::WHITE,             // Espacio donde estaba el jugador (ahora vacío)
+        'p' => Color::BLUE,             // Espacio donde estaba el jugador (ahora vacío)
         'g' => Color::GREEN,             // Meta
         ' ' => Color::WHITE,             // Camino
         _ => Color::GRAY,                // Otro
