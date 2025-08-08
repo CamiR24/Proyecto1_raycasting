@@ -147,18 +147,18 @@ fn main() {
     // 2. move the player on user input
     process_events(&mut player, &window);
 
-    /*let mut mode = "3D";
+    let mut mode = "2D";
 
     if window.is_key_down(KeyboardKey::KEY_M) {
       mode = if mode == "2D" { "3D" } else { "2D" };
     }
 
     // 3. draw stuff
-    if mode == "2D" {*/
+    if mode == "2D" {
       render_maze(&mut framebuffer, &maze, block_size, &player);
-    /*} else {
+    } else {
       render_world(&mut framebuffer, &maze, block_size, &player);
-    }*/
+    }
 
     // 4. swap buffers
     framebuffer.swap_buffers(&mut window, &raylib_thread);
