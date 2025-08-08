@@ -1,27 +1,35 @@
+// framebuffer.rs
+
 use raylib::prelude::*;
 
-pub struct FrameBuffer {
-    pub width: usize,
-    pub height: usize,
-    pub pixels: Vec<Color>,
+pub struct Framebuffer {
+    pub width: u32,
+    pub height: u32,
+    pub color_buffer: Image,
     background_color: Color,
     current_color: Color,
 }
 
-impl FrameBuffer {
-    pub fn new(width: usize, height: usize, background_color: Color) -> Self {
-        let pixels = vec![background_color; width * height];
-        FrameBuffer {
+impl Framebuffer {
+    pub fn new(width: u32, height: u32) -> Self {
+        let color_buffer = Image::gen_image_color(width as i32, height as i32, Color::BLACK);
+        Framebuffer {
             width,
             height,
-            pixels,
-            background_color,
+            color_buffer,
+            background_color: Color::BLACK,
             current_color: Color::WHITE,
         }
     }
 
     pub fn clear(&mut self) {
-        self.pixels.fill(self.background_color);
+        self.color_buffer = Image::gen_image_color(self.width as i32, self.height as i32, self.background_color);
+    }
+
+    pub fn set_pixel(&mut self, x: u32, y: u32) {
+        if x < self.width && y < self.height {
+            self.color_buffer.draw_pixel(x as i32, y as i32, self.current_color);
+        }
     }
 
     pub fn set_background_color(&mut self, color: Color) {
@@ -32,18 +40,18 @@ impl FrameBuffer {
         self.current_color = color;
     }
 
-    pub fn point(&mut self, x: usize, y: usize, color: Color) {
-        if x < self.width && y < self.height {
-            self.pixels[y * self.width + x] = color;
+    pub fn _render_to_file(&self, file_path: &str) {
+        self.color_buffer.export_image(file_path);
+    }
+
+    pub fn swap_buffers(
+        &self,
+        window: &mut RaylibHandle,
+        raylib_thread: &RaylibThread,
+    ) {
+        if let Ok(texture) = window.load_texture_from_image(raylib_thread, &self.color_buffer) {
+            let mut renderer = window.begin_drawing(raylib_thread);
+            renderer.draw_texture(&texture, 0, 0, Color::WHITE);
         }
     }
-    
-    pub fn get_color(&self, x: usize, y: usize) -> Color {
-        if x < self.width && y < self.height {
-            self.pixels[y * self.width + x]
-        } else {
-            Color::BLACK
-        }
-    }
-    
-    }
+}

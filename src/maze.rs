@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-type Maze = Vec<Vec<char>>;
+pub type Maze = Vec<Vec<char>>;
 
 pub fn load_maze(filename: &str) -> Maze {
     let file = File::open(filename).unwrap();

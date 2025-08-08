@@ -1,112 +1,171 @@
+// main.rs
+#![allow(unused_imports)]
+#![allow(dead_code)]
+
+mod line;
 mod framebuffer;
-mod load_maze;
+mod maze;
+mod caster;
 mod player;
 
+use line::line;
+use maze::{Maze,load_maze};
+use caster::{cast_ray, Intersect};
+use framebuffer::Framebuffer;
+use player::{Player, process_events};
+
 use raylib::prelude::*;
-use framebuffer::FrameBuffer;
-use player::Player;
+use std::thread;
+use std::time::Duration;
+use std::f32::consts::PI;
 
-fn main() {
-    let maze = load_maze::load_maze("./maze.txt");
-
-    let player_start = player::find_player_position(&maze);
-
-    let mut player = match player_start {
-        Some((x, y)) => Player {
-            pos: Vector2::new(x as f32 + 0.5, y as f32 + 0.5),
-            a: 0.0,
-        },
-        None => Player {
-            pos: Vector2::new(1.5, 1.5),
-            a: 0.0,
-        },
-    };
-
-    let maze_height = maze.len();
-    let maze_width = if maze_height > 0 { maze[0].len() } else { 1 };
-
-    let framebuffer_width = maze_width;
-    let framebuffer_height = maze_height;
-
-    let cell_size = 70; // Tamaño de cada celda en píxeles
-    let window_width = framebuffer_width * cell_size;
-    let window_height = framebuffer_height * cell_size;
-
-    let (mut window, thread) = raylib::init()
-        .size(window_width as i32, window_height as i32)
-        .title("Raycasting")
-        .build();
-
-    window.set_target_fps(15);
-
-    let mut framebuffer = FrameBuffer::new(framebuffer_width, framebuffer_height, Color::WHITE);
-    
-    let block_size = 1;
-
-    while !window.window_should_close() {
-        framebuffer.clear();
-        render_maze(&mut framebuffer, &maze, block_size);
-
-        let player_x = player.pos.x as usize;
-        let player_y = player.pos.y as usize;
-
-        /*if player_x < framebuffer_width && player_y < framebuffer_height {
-            framebuffer.point(player_x, player_y, Color::RED); // Jugador en rojo
-        }*/
-        
-        let mut d = window.begin_drawing(&thread);
-        d.clear_background(Color::BLACK);
-        
-        for y in 0..framebuffer_height {
-            for x in 0..framebuffer_width {
-                let color = framebuffer.get_color(x, y);
-                let screen_x = (x * window_width / framebuffer_width) as i32;
-                let screen_y = (y * window_height / framebuffer_height) as i32;
-                let rect_width = (window_width / framebuffer_width) as i32;
-                let rect_height = (window_height / framebuffer_height) as i32;
-                
-                d.draw_rectangle(screen_x, screen_y, rect_width, rect_height, color);
-            }
-        }
-    }
+fn cell_to_color(cell: char) -> Color {
+  match cell {
+    '+' => {
+      return Color::BLUEVIOLET;
+    },
+    '-' => {
+      return Color::VIOLET;
+    },
+    '|' => {
+      return Color::VIOLET;
+    },
+    'g' => {
+      return Color::GREEN;
+    },
+    _ => {
+      return Color::WHITE;
+    },
+  }
 }
 
 fn draw_cell(
-    framebuffer: &mut FrameBuffer,
-    xo: usize,
-    yo: usize,
-    block_size: usize,
-    cell: char,
+  framebuffer: &mut Framebuffer,
+  xo: usize,
+  yo: usize,
+  block_size: usize,
+  cell: char,
 ) {
-    let color = match cell {
-        '+' | '-' | '|' => Color::BLACK, // Paredes
-        'p' => Color::BLUE,             // Espacio donde estaba el jugador (ahora vacío)
-        'g' => Color::GREEN,             // Meta
-        ' ' => Color::WHITE,             // Camino
-        _ => Color::GRAY,                // Otro
-    };
+  if cell == ' ' {
+    return;
+  }
+  let color = cell_to_color(cell);
+  framebuffer.set_current_color(color);
 
-    for dx in 0..block_size {
-        for dy in 0..block_size {
-            let x = xo + dx;
-            let y = yo + dy;
-            if x < framebuffer.width && y < framebuffer.height {
-                framebuffer.point(x, y, color);
-            }
-        }
+  for x in xo..xo + block_size {
+    for y in yo..yo + block_size {
+      framebuffer.set_pixel(x as u32, y as u32);
     }
+  }
 }
 
 pub fn render_maze(
-    framebuffer: &mut FrameBuffer,
-    maze: &Vec<Vec<char>>,
-    block_size: usize,
+  framebuffer: &mut Framebuffer,
+  maze: &Maze,
+  block_size: usize,
+  player: &Player,
 ) {
-    for (row_index, row) in maze.iter().enumerate() {
-        for (col_index, &cell) in row.iter().enumerate() {
-            let xo = col_index * block_size;
-            let yo = row_index * block_size;
-            draw_cell(framebuffer, xo, yo, block_size, cell);
-        }
+  for (row_index, row) in maze.iter().enumerate() {
+    for (col_index, &cell) in row.iter().enumerate() {
+      let xo = col_index * block_size;
+      let yo = row_index * block_size;
+      draw_cell(framebuffer, xo, yo, block_size, cell);
     }
+  }
+
+  framebuffer.set_current_color(Color::WHITESMOKE);
+
+  // draw what the player sees
+  let num_rays = 5;
+  for i in 0..num_rays {
+    let current_ray = i as f32 / num_rays as f32; // current ray divided by total rays
+    let a = player.a - (player.fov / 2.0) + (player.fov * current_ray);
+    cast_ray(framebuffer, &maze, &player, a, block_size, true);
+  }
 }
+
+fn render_world(
+  framebuffer: &mut Framebuffer,
+  maze: &Maze,
+  block_size: usize,
+  player: &Player,
+) {
+  let num_rays = framebuffer.width;
+
+  // let hw = framebuffer.width as f32 / 2.0;   // precalculated half width
+  let hh = framebuffer.height as f32 / 2.0;  // precalculated half height
+
+  framebuffer.set_current_color(Color::WHITESMOKE);
+
+  for i in 0..num_rays {
+    let current_ray = i as f32 / num_rays as f32; // current ray divided by total rays
+    let a = player.a - (player.fov / 2.0) + (player.fov * current_ray);
+    let intersect = cast_ray(framebuffer, &maze, &player, a, block_size, false);
+
+    // Calculate the height of the stake
+    let distance_to_wall = intersect.distance;// how far is this wall from the player
+    let distance_to_projection_plane = 70.0; // how far is the "player" from the "camera"
+    // this ratio doesn't really matter as long as it is a function of distance
+    let stake_height = (hh / distance_to_wall) * distance_to_projection_plane;
+
+    // Calculate the position to draw the stake
+    let stake_top = (hh - (stake_height / 2.0)) as usize;
+    let stake_bottom = (hh + (stake_height / 2.0)) as usize;
+
+    // Draw the stake directly in the framebuffer
+    for y in stake_top..stake_bottom {
+      framebuffer.set_pixel(i, y as u32); // Assuming white color for the stake
+    }
+  }
+}
+
+fn main() {
+  let window_width = 1300;
+  let window_height = 900;
+  let block_size = 100;
+
+  let (mut window, raylib_thread) = raylib::init()
+    .size(window_width, window_height)
+    .title("Raycaster Example")
+    .log_level(TraceLogLevel::LOG_WARNING)
+    .build();
+
+  let mut framebuffer = Framebuffer::new(window_width as u32, window_height as u32);
+  framebuffer.set_background_color(Color::new(50, 50, 100, 255));
+
+  let maze = load_maze("maze.txt");
+  let mut player = Player {
+    pos: Vector2::new(150.0, 150.0),
+    a: PI / 3.0,
+    fov: PI / 3.0,
+  };
+
+  while !window.window_should_close() {
+    // 1. clear framebuffer
+    framebuffer.clear();
+
+    // 2. move the player on user input
+    process_events(&mut player, &window);
+
+    /*let mut mode = "3D";
+
+    if window.is_key_down(KeyboardKey::KEY_M) {
+      mode = if mode == "2D" { "3D" } else { "2D" };
+    }
+
+    // 3. draw stuff
+    if mode == "2D" {*/
+      render_maze(&mut framebuffer, &maze, block_size, &player);
+    /*} else {
+      render_world(&mut framebuffer, &maze, block_size, &player);
+    }*/
+
+    // 4. swap buffers
+    framebuffer.swap_buffers(&mut window, &raylib_thread);
+
+    thread::sleep(Duration::from_millis(16));
+  }
+}
+
+
+
