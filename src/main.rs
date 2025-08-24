@@ -1,7 +1,3 @@
-// main.rs
-#![allow(unused_imports)]
-#![allow(dead_code)]
-
 mod line;
 mod framebuffer;
 mod maze;
@@ -280,6 +276,35 @@ fn main() {
     .log_level(TraceLogLevel::LOG_WARNING)
     .build();
 
+  // Inicializar el sistema de audio
+  let mut audio = match RaylibAudio::init_audio_device() {
+      Ok(audio) => {
+          println!("✓ Sistema de audio inicializado");
+          audio
+      },
+      Err(e) => {
+          println!("❌ Error al inicializar audio: {:?}", e);
+          panic!("No se puede continuar sin sistema de audio");
+      }
+  };
+  
+  // Intentar cargar música de fondo
+  let mut music_opt: Option<Music> = None;
+  
+  match audio.new_music("assets/background.mp3") {
+      Ok(mut music) => {
+          println!("✓ Música cargada correctamente");
+          music.set_volume(0.5);
+          music.play_stream();
+          music_opt = Some(music);
+          println!("✓ Música iniciada");
+      },
+      Err(_) => {
+          println!("⚠ No se pudo cargar 'assets/background.mp3'");
+          println!("  Continuando sin música...");
+      }
+  }
+
   let mut framebuffer = Framebuffer::new(window_width as u32, window_height as u32);
   framebuffer.set_background_color(Color::new(153, 102, 204, 255));
 
@@ -293,8 +318,13 @@ fn main() {
   let mut fps = 60.0;
   let mut frame_count = 0;
   let mut fps_timer = Instant::now();
+  let mut mode = "2D";
 
   while !window.window_should_close() {
+    if let Some(ref music) = music_opt {
+        music.update_stream();
+    }
+
     frame_count += 1;
     if fps_timer.elapsed().as_secs_f32() >= 1.0 {
         fps = frame_count as f32 / fps_timer.elapsed().as_secs_f32();
@@ -308,10 +338,20 @@ fn main() {
     // 2. move the player on user input
     process_events(&mut player, &window);
 
-    let mut mode = "2D";
-
-    if window.is_key_down(KeyboardKey::KEY_M) {
+    // Cambio de modo
+    if window.is_key_pressed(KeyboardKey::KEY_M) {
       mode = if mode == "2D" { "3D" } else { "2D" };
+      println!("Modo: {}", mode);
+    }
+
+    // Verificar victoria
+    let player_grid_x = (player.pos.x / block_size as f32) as usize;
+    let player_grid_y = (player.pos.y / block_size as f32) as usize;
+    
+    if player_grid_y < maze.len() && player_grid_x < maze[0].len() {
+        if maze[player_grid_y][player_grid_x] == 'g' {
+            println!("🎉 ¡Victoria alcanzada!");
+        }
     }
 
     // 3. draw stuff
@@ -332,7 +372,10 @@ fn main() {
 
     thread::sleep(Duration::from_millis(16));
   }
+
+  // Limpiar recursos al salir
+  if let Some(ref music) = music_opt {
+      music.stop_stream();
+  }
+  
 }
-
-
-
