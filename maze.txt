@@ -1,9 +1,10 @@
-+--+--+--+--+
-|           |
-+  +--+  +  +
-|  |     |  |
-+  +  +--+--+
-|  |        |
-+  +--+--+  +
-|        | g|
-+--+--+--+--+
+ARVMBTPNARVMB
+R           T
+V  PNAR  V  P
+M  B     P  N
+B  T  NTPVMBA
+T  P        R
+P  NARVMBT  V
+N        P gM
+ARVMBTPNARVMB
+
