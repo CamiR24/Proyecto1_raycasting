@@ -287,13 +287,21 @@ fn render_world(
 }
 
 fn render_fps(framebuffer: &mut Framebuffer, fps: f32) {
-  // Renderizar indicador simple de FPS en la esquina superior izquierda
+  // Renderizar barra y número de FPS en la esquina superior izquierda
   let bar_width = (fps / 60.0 * 100.0).min(100.0) as usize;
+  let fps_text = format!("{:.0}", fps);
   
-  // Fondo para el indicador de FPS
+  // Calcular dimensiones totales
+  let char_width = 8;
+  let char_height = 9;
+  let text_width = fps_text.len() * char_width;
+  let total_width = 110.max(text_width + 8); // Asegurar que sea al menos tan ancho como la barra
+  let total_height = 35; // Altura para barra + texto + espaciado
+  
+  // Fondo para todo el indicador de FPS
   framebuffer.set_current_color(Color::new(0, 0, 0, 200));
-  for x in 10..120 {
-      for y in 10..25 {
+  for x in 10..10 + total_width {
+      for y in 10..10 + total_height {
           framebuffer.set_pixel(x as u32, y as u32);
       }
   }
@@ -307,6 +315,7 @@ fn render_fps(framebuffer: &mut Framebuffer, fps: f32) {
       Color::RED
   };
   
+  // Dibujar la barra de FPS
   framebuffer.set_current_color(bar_color);
   for x in 15..15 + bar_width {
       for y in 15..20 {
@@ -314,15 +323,167 @@ fn render_fps(framebuffer: &mut Framebuffer, fps: f32) {
       }
   }
   
-  // Marco blanco
-  framebuffer.set_current_color(Color::WHITE);
-  for x in 14..116 {
-      framebuffer.set_pixel(x as u32, 14);
-      framebuffer.set_pixel(x as u32, 21);
+  // Dibujar el número de FPS debajo de la barra
+  framebuffer.set_current_color(bar_color); // Usar el mismo color que la barra
+  let text_start_x = 15; // Alineado con el inicio de la barra
+  let text_start_y = 25; // Debajo de la barra
+  
+  for (i, ch) in fps_text.chars().enumerate() {
+    let char_x = text_start_x + i * char_width;
+    draw_digit(framebuffer, char_x, text_start_y, ch);
   }
-  for y in 14..22 {
-      framebuffer.set_pixel(14, y as u32);
-      framebuffer.set_pixel(115, y as u32);
+  
+  // Marco blanco alrededor de todo
+  framebuffer.set_current_color(Color::WHITE);
+  // Borde superior e inferior
+  for x in 10..10 + total_width {
+      framebuffer.set_pixel(x as u32, 10);
+      framebuffer.set_pixel(x as u32, (10 + total_height - 1) as u32);
+  }
+  // Borde izquierdo y derecho
+  for y in 10..10 + total_height {
+      framebuffer.set_pixel(10, y as u32);
+      framebuffer.set_pixel((10 + total_width - 1) as u32, y as u32);
+  }
+}
+
+fn draw_digit(framebuffer: &mut Framebuffer, x: usize, y: usize, digit: char) {
+  // Patrones de píxeles para cada dígito (7x9 píxeles)
+  let patterns = match digit {
+    '0' => [
+      "  ###  ",
+      " #   # ",
+      " #   # ",
+      " #   # ",
+      " #   # ",
+      " #   # ",
+      " #   # ",
+      " #   # ",
+      "  ###  "
+    ],
+    '1' => [
+      "   #   ",
+      "  ##   ",
+      "   #   ",
+      "   #   ",
+      "   #   ",
+      "   #   ",
+      "   #   ",
+      "   #   ",
+      " ##### "
+    ],
+    '2' => [
+      " ####  ",
+      "#    # ",
+      "     # ",
+      "    #  ",
+      "   #   ",
+      "  #    ",
+      " #     ",
+      "#      ",
+      "###### "
+    ],
+    '3' => [
+      " ####  ",
+      "#    # ",
+      "     # ",
+      "  ###  ",
+      "     # ",
+      "     # ",
+      "#    # ",
+      "#    # ",
+      " ####  "
+    ],
+    '4' => [
+      "   ##  ",
+      "  # #  ",
+      " #  #  ",
+      "#   #  ",
+      "###### ",
+      "    #  ",
+      "    #  ",
+      "    #  ",
+      "    #  "
+    ],
+    '5' => [
+      "###### ",
+      "#      ",
+      "#      ",
+      "##### ",
+      "     # ",
+      "     # ",
+      "#    # ",
+      "#    # ",
+      " ####  "
+    ],
+    '6' => [
+      "  ###  ",
+      " #   # ",
+      " #     ",
+      " ####  ",
+      " #   # ",
+      " #   # ",
+      " #   # ",
+      " #   # ",
+      "  ###  "
+    ],
+    '7' => [
+      "###### ",
+      "     # ",
+      "    #  ",
+      "   #   ",
+      "  #    ",
+      " #     ",
+      "#      ",
+      "#      ",
+      "#      "
+    ],
+    '8' => [
+      " ####  ",
+      "#    # ",
+      "#    # ",
+      " ####  ",
+      "#    # ",
+      "#    # ",
+      "#    # ",
+      "#    # ",
+      " ####  "
+    ],
+    '9' => [
+      " ####  ",
+      "#    # ",
+      "#    # ",
+      "#    # ",
+      " ##### ",
+      "     # ",
+      "     # ",
+      "#    # ",
+      " ####  "
+    ],
+    _ => [
+      "       ",
+      "       ",
+      "       ",
+      "       ",
+      "       ",
+      "       ",
+      "       ",
+      "       ",
+      "       "
+    ]
+  };
+  
+  // Dibujar el patrón
+  for (row, pattern) in patterns.iter().enumerate() {
+    for (col, ch) in pattern.chars().enumerate() {
+      if ch == '#' {
+        let px = x + col;
+        let py = y + row;
+        if px < framebuffer.width as usize && py < framebuffer.height as usize {
+          framebuffer.set_pixel(px as u32, py as u32);
+        }
+      }
+    }
   }
 }
 
