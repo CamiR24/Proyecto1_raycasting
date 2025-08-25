@@ -12,12 +12,16 @@ pub struct Player {
 pub fn process_events(player: &mut Player, rl: &RaylibHandle) {
     const MOVE_SPEED: f32 = 10.0;
     const ROTATION_SPEED: f32 = PI / 10.0;
-    const MOUSE_SENSITIVITY: f32 = 0.005;
+    const MOUSE_SENSITIVITY: f32 = 0.003;
 
-    //let mouse_delta_x = window.get_mouse_delta().x;
-    //player.a += mouse_delta_x * MOUSE_SENSITIVITY;
-    //if player.a < 0.0 { player.a += 2.0 * PI; }
-    //else if player.a > 2.0 * PI { player.a -= 2.0 * PI; }
+    let mouse_delta = rl.get_mouse_delta(); 
+    player.a += -mouse_delta.x * MOUSE_SENSITIVITY; 
+
+    if player.a < 0.0 {
+        player.a += 2.0 * PI;
+    } else if player.a > 2.0 * PI {
+        player.a -= 2.0 * PI;
+    }
 
     if rl.is_key_down(KeyboardKey::KEY_LEFT) {
         player.a += ROTATION_SPEED;
