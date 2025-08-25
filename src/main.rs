@@ -3,12 +3,14 @@ mod framebuffer;
 mod maze;
 mod caster;
 mod player;
+mod textures;
 
 use line::line;
 use maze::{Maze,load_maze};
 use caster::{cast_ray, Intersect};
 use framebuffer::Framebuffer;
 use player::{Player, process_events};
+use textures::TextureManager;
 
 use raylib::prelude::*;
 use std::thread;
@@ -195,32 +197,91 @@ fn render_world(
   maze: &Maze,
   block_size: usize,
   player: &Player,
+  texture_manager: &TextureManager, // Agregar parámetro de texturas
 ) {
   let num_rays = framebuffer.width;
-
-  // let hw = framebuffer.width as f32 / 2.0;   // precalculated half width
-  let hh = framebuffer.height as f32 / 2.0;  // precalculated half height
-
-  framebuffer.set_current_color(Color::WHITESMOKE);
+  let hh = framebuffer.height as f32 / 2.0;
+  let texture_size = 128.0; // Tamaño estándar de textura como sugirió tu maestro
 
   for i in 0..num_rays {
-    let current_ray = i as f32 / num_rays as f32; // current ray divided by total rays
+    let current_ray = i as f32 / num_rays as f32;
     let a = player.a - (player.fov / 2.0) + (player.fov * current_ray);
     let intersect = cast_ray(framebuffer, &maze, &player, a, block_size, false);
 
-    // Calculate the height of the stake
-    let distance_to_wall = intersect.distance;// how far is this wall from the player
-    let distance_to_projection_plane = 70.0; // how far is the "player" from the "camera"
-    // this ratio doesn't really matter as long as it is a function of distance
+    let distance_to_wall = intersect.distance;
+    let distance_to_projection_plane = 70.0;
     let stake_height = (hh / distance_to_wall) * distance_to_projection_plane;
 
-    // Calculate the position to draw the stake
     let stake_top = (hh - (stake_height / 2.0)) as usize;
     let stake_bottom = (hh + (stake_height / 2.0)) as usize;
 
-    // Draw the stake directly in the framebuffer
+    // Calcular punto de impacto
+    let hit_x = player.pos.x + distance_to_wall * a.cos();
+    let hit_y = player.pos.y + distance_to_wall * a.sin();
+    
+    // Calcular qué celda del maze fue golpeada
+    let map_x = (hit_x / block_size as f32).floor();
+    let map_y = (hit_y / block_size as f32).floor();
+    
+    // Calcular la posición relativa dentro de la celda (0.0 a 1.0)
+    let cell_x = hit_x / block_size as f32 - map_x;
+    let cell_y = hit_y / block_size as f32 - map_y;
+    
+    // Determinar qué cara de la pared fue golpeada
+    let hit_side = {
+        let dx = hit_x - (map_x * block_size as f32 + block_size as f32 / 2.0);
+        let dy = hit_y - (map_y * block_size as f32 + block_size as f32 / 2.0);
+        
+        if dx.abs() > dy.abs() {
+            if dx > 0.0 { "east" } else { "west" }
+        } else {
+            if dy > 0.0 { "south" } else { "north" }
+        }
+    };
+    
+    // Calcular coordenada X de la textura basada en la cara golpeada
+    let tx = match hit_side {
+        "north" | "south" => (cell_x * texture_size) as u32,
+        "east" | "west" => (cell_y * texture_size) as u32,
+        _ => 0,
+    };
+    
+    // Asegurar que tx esté en rango válido
+    let tx = tx.min(127);
+
+    // Renderizar la columna con textura
     for y in stake_top..stake_bottom {
-      framebuffer.set_pixel(i, y as u32); // Assuming white color for the stake
+      if y < framebuffer.height as usize {
+        // Calcular coordenada Y de la textura (0 a 127)
+        let texture_y_ratio = (y - stake_top) as f32 / (stake_bottom - stake_top).max(1) as f32;
+        let ty = (texture_y_ratio * texture_size) as u32;
+        let ty = ty.min(127);
+        
+        // Obtener el color del pixel de la textura
+        let color = texture_manager.get_pixel_color(intersect.impact, tx, ty);
+        
+        // Aplicar sombreado basado en la distancia y cara
+        let mut shade_factor = (1.0 - (distance_to_wall / 800.0).min(1.0)) * 0.7 + 0.3;
+        
+        // Diferentes tonos para diferentes caras (efecto 3D)
+        shade_factor *= match hit_side {
+            "north" => 1.0,    // Cara más clara
+            "south" => 0.8,    // Cara más oscura  
+            "east" => 0.9,     // Cara intermedia
+            "west" => 0.7,     // Cara más oscura
+            _ => 0.8,
+        };
+        
+        let shaded_color = Color::new(
+          (color.r as f32 * shade_factor) as u8,
+          (color.g as f32 * shade_factor) as u8,
+          (color.b as f32 * shade_factor) as u8,
+          color.a,
+        );
+        
+        framebuffer.set_current_color(shaded_color);
+        framebuffer.set_pixel(i, y as u32);
+      }
     }
   }
 }
@@ -276,8 +337,10 @@ fn main() {
     .log_level(TraceLogLevel::LOG_WARNING)
     .build();
 
+  let texture_manager = TextureManager::new(&mut window, &raylib_thread);
+
   // Inicializar el sistema de audio
-  let mut audio = match RaylibAudio::init_audio_device() {
+  let audio = match RaylibAudio::init_audio_device() {
       Ok(audio) => {
           println!("✓ Sistema de audio inicializado");
           audio
@@ -292,7 +355,7 @@ fn main() {
   let mut music_opt: Option<Music> = None;
   
   match audio.new_music("assets/background.mp3") {
-      Ok(mut music) => {
+      Ok(music) => {
           println!("✓ Música cargada correctamente");
           music.set_volume(0.5);
           music.play_stream();
@@ -308,7 +371,7 @@ fn main() {
   let mut framebuffer = Framebuffer::new(window_width as u32, window_height as u32);
   framebuffer.set_background_color(Color::new(153, 102, 204, 255));
 
-  let maze = load_maze("maze.txt");
+  let maze = load_maze("maze_childhood.txt");
   let mut player = Player {
     pos: Vector2::new(150.0, 150.0),
     a: PI / 3.0,
@@ -358,7 +421,7 @@ fn main() {
     if mode == "2D" {
       render_maze(&mut framebuffer, &maze, block_size, &player);
     } else {
-      render_world(&mut framebuffer, &maze, block_size, &player);
+      render_world(&mut framebuffer, &maze, block_size, &player, &texture_manager);
     }
 
     if mode == "3D" {
