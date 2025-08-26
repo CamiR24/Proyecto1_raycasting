@@ -13,7 +13,7 @@ use caster::{cast_ray, Intersect};
 use framebuffer::Framebuffer;
 use player::{Player, process_events};
 use textures::TextureManager;
-use menu::{render_menu, render_victory_screen};
+use menu::{MenuImages};
 
 use raylib::prelude::Texture2D;
 use raylib::prelude::*;
@@ -510,6 +510,17 @@ fn main() {
     .log_level(TraceLogLevel::LOG_WARNING)
     .build();
 
+  let menu_images = match MenuImages::load(&mut window, &raylib_thread) {
+    Ok(images) => {
+      println!("✓ Imágenes del menú cargadas correctamente");
+      Some(images)
+    },
+    Err(e) => {
+      println!("⚠ Error cargando imágenes: {}", e);
+      None
+    }
+  };
+
   let texture_manager = TextureManager::new(&mut window, &raylib_thread);
 
   // Inicializar el sistema de audio
@@ -578,7 +589,7 @@ fn main() {
       GameState::Menu => {
           // --- Pantalla de menú ---
           let mut d = window.begin_drawing(&raylib_thread);
-          menu::render_menu(&mut d);
+          menu::render_menu(&mut d, menu_images.as_ref());
 
           // Selección de laberinto
           if d.is_key_pressed(KeyboardKey::KEY_ONE) {

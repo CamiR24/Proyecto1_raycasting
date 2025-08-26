@@ -1,8 +1,34 @@
 // menu.rs
 use raylib::prelude::*;
 
-pub fn render_menu(d: &mut RaylibDrawHandle) {
-  // Fondo degradado
+// Estructura para manejar las imágenes del menú
+pub struct MenuImages {
+    pub childhood: Texture2D,
+    pub teen: Texture2D,
+    pub adulthood: Texture2D,
+}
+
+impl MenuImages {
+    pub fn load(rl: &mut RaylibHandle, thread: &RaylibThread) -> Result<Self, String> {
+        // Cargar las imágenes desde archivos PNG
+        let childhood = rl.load_texture(thread, "assets/childhood.png")
+            .map_err(|_| "No se pudo cargar childhood.png".to_string())?;
+        
+        let teen = rl.load_texture(thread, "assets/teen.png")
+            .map_err(|_| "No se pudo cargar teen.png".to_string())?;
+        
+        let adulthood = rl.load_texture(thread, "assets/adulthood.png")
+            .map_err(|_| "No se pudo cargar adulthood.png".to_string())?;
+        
+        Ok(MenuImages {
+            childhood,
+            teen,
+            adulthood,
+        })
+    }
+}
+
+pub fn render_menu(d: &mut RaylibDrawHandle, menu_images: Option<&MenuImages>) {
   for y in 0..d.get_screen_height() {
     let gradient_ratio = y as f32 / d.get_screen_height() as f32;
     let color = Color::new(
@@ -14,7 +40,7 @@ pub fn render_menu(d: &mut RaylibDrawHandle) {
     d.draw_line(0, y, d.get_screen_width(), y, color);
   }
   
-  let title = "🧠 INSIDE OUT MAZE 🧠";
+  let title = "INSIDE OUT MAZE";
   let title_x = (d.get_screen_width() - measure_text(title, 60)) / 2;
   
   d.draw_text(title, title_x + 3, 53, 60, Color::new(0, 0, 0, 120));
@@ -34,8 +60,14 @@ pub fn render_menu(d: &mut RaylibDrawHandle) {
   let characters = [
     ("INFANCIA", "Alegría", Color::new(255, 215, 0, 255), "[1]"),
     ("ADOLESCENCIA", "Ansiedad", Color::new(255, 140, 0, 255), "[2]"),
-    ("ADULTEZ", "Nostalgia", Color::new(138, 43, 226, 255), "[3]"),
+    ("ADULTEZ", "Envidia", Color::new(138, 43, 226, 255), "[3]"),
   ];
+
+  let textures = if let Some(images) = menu_images {
+    vec![Some(&images.childhood), Some(&images.teen), Some(&images.adulthood)]
+  } else {
+    vec![None, None, None]
+  };
   
   for (i, (stage, emotion, color, key)) in characters.iter().enumerate() {
     let card_x = start_x + (i as i32) * (card_width + card_spacing);
@@ -63,13 +95,33 @@ pub fn render_menu(d: &mut RaylibDrawHandle) {
       card_width - 4, card_height - 4,
       *color
     );
+
+    let image_size = 180;
+    let image_x = card_x + (card_width - image_size) / 2;
+    let image_y = card_y + 40;
     
+    if let Some(texture) = textures[i] {
+      let dest_rect = Rectangle::new(
+        image_x as f32, 
+        image_y as f32, 
+        image_size as f32, 
+        image_size as f32
+      );
+      let source_rect = Rectangle::new(
+        0.0, 
+        0.0, 
+        texture.width as f32, 
+        texture.height as f32
+      );
+    
+    d.draw_texture_pro(texture, source_rect, dest_rect, Vector2::zero(), 0.0, Color::WHITE);
+
     let stage_x = card_x + (card_width - measure_text(stage, 28)) / 2;
-    d.draw_text(stage, stage_x, card_y + 200, 28, *color);
+    d.draw_text(stage, stage_x, card_y + 250, 28, *color);
     
     let emotion_text = format!("Emoción: {}", emotion);
     let emotion_x = card_x + (card_width - measure_text(&emotion_text, 20)) / 2;
-    d.draw_text(&emotion_text, emotion_x, card_y + 240, 20, Color::new(200, 200, 200, 255));
+    d.draw_text(&emotion_text, emotion_x, card_y + 290, 20, Color::new(200, 200, 200, 255));
     
     let key_bg_y = card_y + card_height - 60;
     let key_bg_width = 100;
@@ -98,42 +150,10 @@ pub fn render_menu(d: &mut RaylibDrawHandle) {
     d.draw_text(instruction, inst_x + 1, inst_y + 1, 18, Color::new(0, 0, 0, 100));
     d.draw_text(instruction, inst_x, inst_y, 18, Color::new(220, 220, 255, 255));
   }
-  
-  draw_floating_particles(d);
+}
 }
 
-fn draw_floating_particles(d: &mut RaylibDrawHandle) {
-  //función decoración
-  let time = unsafe { raylib::ffi::GetTime() } as f32;
-  
-  for i in 0..20 {
-    let i_f = i as f32;
-    let x = (d.get_screen_width() as f32 * 0.1 + 
-             (time * 20.0 + i_f * 18.0).sin() * (d.get_screen_width() as f32 * 0.8)) as i32;
-    let y = (50.0 + (time * 15.0 + i_f * 23.0).cos() * 30.0 + i_f * 25.0) as i32;
-    
-    let alpha = (128.0 + (time * 30.0 + i_f * 10.0).sin() * 127.0) as u8;
-    let size = 2 + ((time * 25.0 + i_f * 15.0).sin() * 2.0) as i32;
-    
-    let colors = [
-      Color::new(255, 215, 0, alpha),   // Dorado
-      Color::new(255, 140, 0, alpha),   // Naranja
-      Color::new(138, 43, 226, alpha),  // Púrpura
-      Color::new(50, 205, 50, alpha),   // Verde
-      Color::new(220, 20, 60, alpha),   // Rojo
-    ];
-    
-    let color = colors[i % colors.len()];
-    
-    d.draw_circle(x, y, size as f32, color);
-    d.draw_pixel(x - size, y, color);
-    d.draw_pixel(x + size, y, color);
-    d.draw_pixel(x, y - size, color);
-    d.draw_pixel(x, y + size, color);
-  }
-}
-
-// Función auxiliar para medir texto (necesaria para centrar)
+//medir texto (necesaria para centrar)
 fn measure_text(text: &str, font_size: i32) -> i32 {
   text.len() as i32 * (font_size / 2)
 }
@@ -151,21 +171,16 @@ pub fn render_victory_screen(d: &mut RaylibDrawHandle) {
     d.draw_line(0, y, d.get_screen_width(), y, color);
   }
 
-  let title = "🎉 ¡FELICITACIONES! 🎉";
+  let title = "¡FELICITACIONES!";
   let title_x = (d.get_screen_width() - measure_text(title, 50)) / 2;
   
   d.draw_text(title, title_x + 3, 253, 50, Color::new(0, 0, 0, 120));
   d.draw_text(title, title_x, 250, 50, Color::new(50, 205, 50, 255)); // Verde brillante
   
-  let subtitle = "Has completado el laberinto emocional";
-  let subtitle_x = (d.get_screen_width() - measure_text(subtitle, 30)) / 2;
-  d.draw_text(subtitle, subtitle_x, 320, 30, Color::new(200, 255, 200, 255));
-  
   let instruction = "Presiona [ENTER] para volver al menú";
   let inst_x = (d.get_screen_width() - measure_text(instruction, 25)) / 2;
   d.draw_text(instruction, inst_x + 2, 402, 25, Color::new(0, 0, 0, 100)); // Sombra
   d.draw_text(instruction, inst_x, 400, 25, Color::WHITE);
-  
-  draw_floating_particles(d);
 }
+
 
