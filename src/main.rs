@@ -611,21 +611,15 @@ fn main() {
 
       GameState::Playing => {
           // --- Juego principal ---
-          process_events(&mut player, &window);
+          process_events(&mut player, &window, &maze, block_size as f32);
 
           if window.is_key_pressed(KeyboardKey::KEY_M) {
               mode = if mode == "2D" { "3D" } else { "2D" };
               println!("Modo: {}", mode);
           }
 
-          // Verificar victoria (jugador llega a la 'g')
-          let player_grid_x = (player.pos.x / block_size as f32) as usize;
-          let player_grid_y = (player.pos.y / block_size as f32) as usize;
-          
-          if player_grid_y < maze.len() && player_grid_x < maze[0].len() {
-              if maze[player_grid_y][player_grid_x] == 'g' {
-                  game_state = GameState::Victory;
-              }
+          if player.has_reached_goal(&maze, block_size as f32) {
+            game_state = GameState::Victory;
           }
 
           // Limpiar framebuffer al inicio del frame
