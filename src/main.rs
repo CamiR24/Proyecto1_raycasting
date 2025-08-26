@@ -4,6 +4,8 @@ mod maze;
 mod caster;
 mod player;
 mod textures;
+mod images;
+mod menu;
 
 use line::line;
 use maze::{Maze,load_maze};
@@ -11,11 +13,20 @@ use caster::{cast_ray, Intersect};
 use framebuffer::Framebuffer;
 use player::{Player, process_events};
 use textures::TextureManager;
+use menu::{render_menu, render_victory_screen};
 
+use raylib::prelude::Texture2D;
 use raylib::prelude::*;
+use raylib::color::Color;
 use std::thread;
 use std::time::{Duration, Instant};
 use std::f32::consts::PI;
+
+enum GameState {
+  Menu,
+  Playing,
+  Victory,
+}
 
 fn cell_to_color(cell: char) -> Color {
   match cell {
@@ -492,9 +503,10 @@ fn main() {
   let window_height = 900;
   let block_size = 100;
 
+  // Solo inicializar UNA ventana
   let (mut window, raylib_thread) = raylib::init()
     .size(window_width, window_height)
-    .title("Raycaster Example")
+    .title("Inside Out Maze - Raycaster")
     .log_level(TraceLogLevel::LOG_WARNING)
     .build();
 
@@ -508,7 +520,11 @@ fn main() {
       },
       Err(e) => {
           println!("❌ Error al inicializar audio: {:?}", e);
-          panic!("No se puede continuar sin sistema de audio");
+          println!("Continuando sin audio...");
+          // En lugar de pánico, seguimos sin audio
+          RaylibAudio::init_audio_device().unwrap_or_else(|_| {
+              panic!("No se puede inicializar el sistema de audio en absoluto");
+          })
       }
   };
   
@@ -532,7 +548,7 @@ fn main() {
   let mut framebuffer = Framebuffer::new(window_width as u32, window_height as u32);
   framebuffer.set_background_color(Color::new(153, 102, 204, 255));
 
-  let maze = load_maze("maze_childhood.txt");
+  let mut maze = load_maze("maze_childhood.txt");
   let mut player = Player {
     pos: Vector2::new(150.0, 150.0),
     a: PI / 3.0,
@@ -543,6 +559,8 @@ fn main() {
   let mut frame_count = 0;
   let mut fps_timer = Instant::now();
   let mut mode = "2D";
+
+  let mut game_state = GameState::Menu;
 
   while !window.window_should_close() {
     if let Some(ref music) = music_opt {
@@ -556,50 +574,74 @@ fn main() {
         fps_timer = Instant::now();
     }
 
-    // 1. clear framebuffer
-    framebuffer.clear();
+    match game_state {
+      GameState::Menu => {
+          // --- Pantalla de menú ---
+          let mut d = window.begin_drawing(&raylib_thread);
+          menu::render_menu(&mut d);
 
-    // 2. move the player on user input
-    process_events(&mut player, &window);
+          // Selección de laberinto
+          if d.is_key_pressed(KeyboardKey::KEY_ONE) {
+              maze = load_maze("maze_childhood.txt");
+              player.pos = Vector2::new(150.0, 150.0);
+              game_state = GameState::Playing;
+          }
+          if d.is_key_pressed(KeyboardKey::KEY_TWO) {
+              maze = load_maze("maze_teen.txt");
+              player.pos = Vector2::new(150.0, 150.0);
+              game_state = GameState::Playing;
+          }
+          if d.is_key_pressed(KeyboardKey::KEY_THREE) {
+              maze = load_maze("maze_adulthood.txt");
+              player.pos = Vector2::new(150.0, 150.0);
+              game_state = GameState::Playing;
+          }
+      }
 
-    // Cambio de modo
-    if window.is_key_pressed(KeyboardKey::KEY_M) {
-      mode = if mode == "2D" { "3D" } else { "2D" };
-      println!("Modo: {}", mode);
-    }
+      GameState::Playing => {
+          // --- Juego principal ---
+          process_events(&mut player, &window);
 
-    // Verificar victoria
-    let player_grid_x = (player.pos.x / block_size as f32) as usize;
-    let player_grid_y = (player.pos.y / block_size as f32) as usize;
+          if window.is_key_pressed(KeyboardKey::KEY_M) {
+              mode = if mode == "2D" { "3D" } else { "2D" };
+              println!("Modo: {}", mode);
+          }
+
+          // Verificar victoria (jugador llega a la 'g')
+          let player_grid_x = (player.pos.x / block_size as f32) as usize;
+          let player_grid_y = (player.pos.y / block_size as f32) as usize;
+          
+          if player_grid_y < maze.len() && player_grid_x < maze[0].len() {
+              if maze[player_grid_y][player_grid_x] == 'g' {
+                  game_state = GameState::Victory;
+              }
+          }
+
+          // Limpiar framebuffer al inicio del frame
+          framebuffer.clear();
+
+          // Renderizar escena
+          if mode == "2D" {
+              render_maze(&mut framebuffer, &maze, block_size, &player);
+          } else {
+              render_world(&mut framebuffer, &maze, block_size, &player, &texture_manager);
+              render_minimap(&mut framebuffer, &maze, &player, block_size);
+          }
+
+          render_fps(&mut framebuffer, fps);
+          framebuffer.swap_buffers(&mut window, &raylib_thread);
+      }
+
+      GameState::Victory => {
+        let mut d = window.begin_drawing(&raylib_thread);
+        menu::render_victory_screen(&mut d);
     
-    if player_grid_y < maze.len() && player_grid_x < maze[0].len() {
-        if maze[player_grid_y][player_grid_x] == 'g' {
-            println!("🎉 ¡Victoria alcanzada!");
+        if d.is_key_pressed(KeyboardKey::KEY_ENTER) {
+            game_state = GameState::Menu;
         }
+      }
     }
-
-    // 3. draw stuff
-    if mode == "2D" {
-      render_maze(&mut framebuffer, &maze, block_size, &player);
-    } else {
-      render_world(&mut framebuffer, &maze, block_size, &player, &texture_manager);
-    }
-
-    if mode == "3D" {
-      render_minimap(&mut framebuffer, &maze, &player, block_size);
-    }
-
-    render_fps(&mut framebuffer, fps);
-
-    // 4. swap buffers
-    framebuffer.swap_buffers(&mut window, &raylib_thread);
 
     thread::sleep(Duration::from_millis(16));
   }
-
-  // Limpiar recursos al salir
-  if let Some(ref music) = music_opt {
-      music.stop_stream();
-  }
-  
 }
