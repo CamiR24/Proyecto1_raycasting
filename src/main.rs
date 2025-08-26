@@ -4,7 +4,6 @@ mod maze;
 mod caster;
 mod player;
 mod textures;
-mod images;
 mod menu;
 
 use line::line;
@@ -620,6 +619,7 @@ fn main() {
 
           if player.has_reached_goal(&maze, block_size as f32) {
             game_state = GameState::Victory;
+            continue;
           }
 
           // Limpiar framebuffer al inicio del frame
